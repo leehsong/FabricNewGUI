@@ -4,8 +4,10 @@ import mil as MIL
 import os
 import sys
 import serial
+from multiprocessing import Process, Queue
 
-def MGrab(ScannerID, nImage):
+## Setup Multi thread
+def MGrab(id, ScannerID, nImage):
     ## Directory Check
     rootdir = "Scanner/{}".format(ScannerID)
     try:
@@ -64,8 +66,7 @@ def MGrab(ScannerID, nImage):
         # Halt continuous grab.
         MIL.MdigHalt(MilDigitizer_0)
         MIL.MdigHalt(MilDigitizer_1)
-        MIL.MbufExport(MIL.MIL_TEXT("{}/0_FileName{}.tif".format(rootdir, i)), MIL.M_TIFF, MilImageDisp_0)
-        MIL.MbufExport(MIL.MIL_TEXT("{}/1_FileName{}.tif".format(rootdir, i)), MIL.M_TIFF, MilImageDisp_1)
+        MIL.MbufExport(MIL.MIL_TEXT("{}/{}_FileName{}.tif".format(rootdir, id, i)), MIL.M_TIFF, MilImageDisp_0)
 
     MIL.MbufFree(MilImageDisp_0)
     MIL.MbufFree(MilImageDisp_1)
@@ -99,7 +100,7 @@ def TurnOff(scanID):
 def sendsignal(port, command):
     ser = serial.Serial()
     ser.baudrate = 115200
-    ser.port = 'COM{}'.format(port-1)  # counter for port name starts at 0
+    ser.port = 'COM{}'.format(port)  # counter for port name starts at 0
 
     # check to see if port is open or closed
     if (ser.isOpen() == False):
@@ -108,7 +109,7 @@ def sendsignal(port, command):
         ser.timeout = 10
         ser.open()
     else:
-        print('The Port %d is closed'.format(COMPORT))
+        print('The Port %d is closed'.format(port))
     ser.write(b'{}\r\n'.format(command))
     ser.close()
 
@@ -121,6 +122,8 @@ if __name__ == "__main__":
         print("Command: {}".format(command))
         scanID = sys.argv[2]
         if ( command == "scan") :
+            th1 = Process(target=MGrab, args=(1, scanID, 100))
+            th2 = Process(target=MGrab, args=(2, scanID, 100))
             MGrab(scanID, 100)
         if ( command == "turnon") :
             TurnOn(scanID)

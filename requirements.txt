@@ -1,0 +1,4 @@
+pyside2==5.14.2.2
+pyserial
+watchdog
+pillow

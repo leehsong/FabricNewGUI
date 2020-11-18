@@ -20,6 +20,13 @@ from PySide2 import QtCore, QtGui, QtWidgets
 from PySide2.QtCore import (Signal, QCoreApplication, QPropertyAnimation, QDate, QDateTime, QMetaObject, QObject, QPoint, QRect, QSize, QTime, QUrl, Qt, QEvent)
 from PySide2.QtGui import (QBrush, QColor, QConicalGradient, QCursor, QFont, QFontDatabase, QIcon, QKeySequence, QLinearGradient, QPalette, QPainter, QPixmap, QRadialGradient)
 from PySide2.QtWidgets import *
+import subprocess
+from watchdog.observers import Observer
+from watchdog.events import LoggingEventHandler
+import logging
+import time
+
+from PIL import Image, ImageDraw, ImageFont
 
 # GUI FILE
 from app_modules import *
@@ -27,6 +34,16 @@ from app_modules import *
 file_list = []
 file_sender = []
 DIR = ''
+updated_files = {'1_1':'1_FileName0.tif'}
+
+class Event(LoggingEventHandler):
+    def on_modified(self, event):
+        filename = event.src_path[12:]
+        keyname = event.src_path[10] +"_"+event.src_path[12]
+ #       print(keyname)
+        updated_files[keyname]=filename
+ #       print(f'event type: {event.event_type}  path : {event.src_path[10:]}')
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -175,25 +192,76 @@ class MainWindow(QMainWindow):
     # 이미지 수집
     def toggle_btn_cam1(self, state):
         if state == True:
+            process0 = subprocess.Popen("python grab_2camera.py turnon 0 Test 1")
             print("btn_cam1: On")
         else:
+            process0 = subprocess.Popen("python grab_2camera.py turnoff 0 Test 1")
             print("btn_cam1: Off")
 
     def toggle_btn_cam2(self, state):
         if state == True:
+            process0 = subprocess.Popen("python grab_2camera_multi.py turnon 1 Test 1")
             print("btn_cam2: On")
         else:
+            process0 = subprocess.Popen("python grab_2camera_multi.py turnoff 1 Test 1")
             print("btn_cam2: Off")
 
     def toggle_btn_cam3(self, state):
         if state == True:
+            process0 = subprocess.Popen("python grab_2camera_multi.py turnon 2 Test 1")
             print("btn_cam3: On")
         else:
+            process0 = subprocess.Popen("python grab_2camera_multi.py turnoff 2 Test 1")
             print("btn_cam3: Off")
+
+    def save_temp_image(self, filename):
+        if  len(updated_files) < 6:
+            return
+#        time.sleep(0)
+        keys = ['1_1', '1_2', '2_1', '2_2','3_1', '3_2']
+        scannerid = [1, 1, 2, 2, 3, 3]
+        new_image = Image.new('RGB', (320*2, 220*3))
+        fnt = ImageFont.truetype(os.path.join('./fonts/segoeui.ttf'), 15)
+        for i in range(0, 6):
+            image = Image.open('./Scanner/{}/{}'.format(scannerid[i],updated_files[keys[i]]))
+            image_small = image.resize((300,200))
+            d = ImageDraw.Draw(image_small)
+            d.text((10, 10), '{}/{}'.format(keys[i], updated_files[keys[i]]), font=fnt, fill=(255, 255, 255))
+            new_image.paste(image_small, ((i%2)*320 + 10, (scannerid[i]-1)*220 + 10))
+
+        new_image.save(filename, "JPEG")
 
     def btn_test(self):
         print("btn_test: pressed")
-        self.pixmap = QPixmap("On.png")
+        process0 = subprocess.Popen("python grab_2camera_multi_sync.py scan 1 Test 1")
+        process1 = subprocess.Popen("python grab_2camera_multi_sync.py scan 2 Test 1")
+        process2 = subprocess.Popen("python grab_2camera_multi_sync.py scan 3 Test 1")
+
+        logging.basicConfig(level=logging.INFO,
+                            format='%(asctime)s - %(message)s',
+                            datefmt='%Y-%m-%d %H:%M:%S')
+        event_handler = Event()
+        observer = Observer()
+        observer.schedule(event_handler, './Scanner', recursive=True)
+        observer.start()
+        index = 0
+        try:
+            while True:
+                time.sleep(1)
+                poll = process1.poll()
+                if poll == None:
+                    print("Check update")
+ #                   self.save_temp_image('./Merge/{}.jpg'.format(index))
+                    index = index + 1
+                    print(updated_files)
+                else:
+                    observer.stop()
+                    break
+        except KeyboardInterrupt:
+            observer.stop()
+
+        self.save_temp_image('test_scan.jpg')
+        self.pixmap = QPixmap('test_scan.jpg')
         self.ui.label_scan_image.setPixmap(self.pixmap)
         self.ui.label_scan_image.setScaledContents(True)
 
